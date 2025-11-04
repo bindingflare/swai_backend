@@ -87,16 +87,108 @@ function analyzeConsent(text) {
 	};
 }
 
+// Enhanced analyzer returning { score, label, bullets }
+function analyzeConsentV2(text) {
+  if (!text || !text.toString().trim()) {
+    return { score: 0, label: '분석할 내용이 없습니다', bullets: [] };
+  }
+
+  const t = text.toString();
+
+  function count(keyword) {
+    const re = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    const m = t.match(re);
+    return m ? m.length : 0;
+  }
+
+  function anyOf(arr) { return arr.some(k => t.indexOf(k) !== -1); }
+
+  let score = 0;
+
+  // Third-party sharing / outsourcing
+  const thirdKW = ['제3자', '제3 자', '제3', '수탁자', '위탁', '제공', '제공받는자', '제공받는 자'];
+  let thirdHits = 0; thirdKW.forEach(k => { thirdHits += count(k); });
+  const corpHits = count('주식회사') + count('㈜') + count('유한회사');
+  const approxThird = Math.max(0, corpHits);
+  const thirdScore = Math.min(30, thirdHits * 5);
+  score += thirdScore;
+
+  // Sensitive data
+  const sensitiveKW = ['민감정보', '고유식별정보', '주민등록번호', '여권번호', '운전면허번호', '건강정보', '바이오정보', '지문', '얼굴인식'];
+  const hasSensitive = anyOf(sensitiveKW);
+  if (hasSensitive) score += 25;
+
+  // Marketing / advertising
+  const mktKW = ['마케팅', '광고', '홍보', '프로모션', '광고성 정보', '맞춤형', '광고성'];
+  const hasMarketing = anyOf(mktKW);
+  if (hasMarketing) score += 15;
+
+  // Data categories breadth
+  const cats = ['이름','성명','생년월일','주소','전화','휴대전화','이메일','계좌','카드','위치','쿠키','결제','기기','IP','식별자','로그'];
+  let uniqueCats = 0; cats.forEach(c => { if (t.indexOf(c) !== -1) uniqueCats += 1; });
+  const catScore = Math.min(20, uniqueCats * 2);
+  score += catScore;
+
+  // Retention period
+  let retentionNote = '명시되지 않음/일반';
+  const indefiniteKW = ['영구', '무기한', '별도 보유기간', '탈퇴 후에도'];
+  const hasPurposeDone = (t.indexOf('목적 달성 시') !== -1) || (t.indexOf('목적달성 시') !== -1);
+  if (indefiniteKW.some(k => t.indexOf(k) !== -1)) {
+    score += 20; retentionNote = '무기한/불명확';
+  } else {
+    const m = t.match(/([0-9]{1,2})\s*년/g);
+    if (m && m.length) {
+      const years = m.map(s => parseInt(s.replace(/[^0-9]/g,''),10)).filter(Boolean);
+      const maxY = years.length ? Math.max.apply(null, years) : 0;
+      if (maxY >= 3) { score += 10; retentionNote = `${maxY}년 이상`; }
+      else if (maxY >= 1) { score += 5; retentionNote = `${maxY}년 내`; }
+    }
+    if (hasPurposeDone) { retentionNote = '목적 달성 시'; }
+  }
+
+  // Mitigations
+  const hasOptOut = anyOf(['동의 거부', '철회', '옵트아웃', '수신 거부']);
+  const hasAnon = anyOf(['익명', '가명처리', '가명화']);
+  if (hasOptOut) score -= 10;
+  if (hasAnon) score -= 5;
+
+  // Length-based sanity adjustment (optional minor penalty for very short text)
+  if (t.length < 50) score = Math.max(0, score - 10);
+
+  score = Math.max(0, Math.min(100, score));
+
+  let label = '보통';
+  if (score < 30) label = '낮음';
+  else if (score < 60) label = '보통';
+  else if (score < 80) label = '높음';
+  else label = '매우 높음';
+
+  const bullets = [];
+  bullets.push(`제3자 제공/위탁 징후: ${thirdHits > 0 ? '있음' : '없음'}${approxThird ? ` (사업자 언급 ~${approxThird}회)` : ''}`);
+  bullets.push(`민감정보 포함: ${hasSensitive ? '예' : '아니오'}`);
+  bullets.push(`마케팅/광고 활용: ${hasMarketing ? '예' : '아니오'}`);
+  bullets.push(`수집 항목 다양성: ${uniqueCats}개 항목 감지`);
+  bullets.push(`보유기간: ${retentionNote}`);
+  if (hasOptOut || hasAnon) bullets.push(`감경 요인: ${[hasOptOut ? '동의 거부/철회 안내' : null, hasAnon ? '익명/가명 처리' : null].filter(Boolean).join(', ')}`);
+
+  const result = { score, label, bullets };
+  // Optional aliases for broader compatibility
+  result.riskScore = score;
+  result.issues = bullets;
+  result.result = { score, label, bullets };
+  return result;
+}
+
 // Support GET and POST
 app.get('/api/check', (req, res) => {
 	const text = req.query.text || '';
-	const result = analyzeConsent(text);
+	const result = analyzeConsentV2(text);
 	res.json(result);
 });
 
 app.post('/api/check', (req, res) => {
 	const text = req.body && (req.body.text || req.body);
-	const result = analyzeConsent(text);
+	const result = analyzeConsentV2(text);
 	res.json(result);
 });
 
