@@ -105,7 +105,7 @@ function analyzeConsent(text) {
 	};
 }
 
-// Enhanced analyzer returning { score, label, bullets }
+// V2: Enhanced Risk Analyzer
 function analyzeConsentV2(text) {
   if (!text || !text.toString().trim()) {
     return { score: 0, label: '분석할 내용이 없습니다', bullets: [] };
@@ -123,7 +123,6 @@ function analyzeConsentV2(text) {
 
   let score = 0;
 
-  // Third-party sharing / outsourcing
   const thirdKW = ['제3자', '제3 자', '제3', '수탁자', '위탁', '제공', '제공받는자', '제공받는 자'];
   let thirdHits = 0; thirdKW.forEach(k => { thirdHits += count(k); });
   const corpHits = count('주식회사') + count('㈜') + count('유한회사');
@@ -131,23 +130,19 @@ function analyzeConsentV2(text) {
   const thirdScore = Math.min(30, thirdHits * 5);
   score += thirdScore;
 
-  // Sensitive data
   const sensitiveKW = ['민감정보', '고유식별정보', '주민등록번호', '여권번호', '운전면허번호', '건강정보', '바이오정보', '지문', '얼굴인식'];
   const hasSensitive = anyOf(sensitiveKW);
   if (hasSensitive) score += 25;
 
-  // Marketing / advertising
   const mktKW = ['마케팅', '광고', '홍보', '프로모션', '광고성 정보', '맞춤형', '광고성'];
   const hasMarketing = anyOf(mktKW);
   if (hasMarketing) score += 15;
 
-  // Data categories breadth
   const cats = ['이름','성명','생년월일','주소','전화','휴대전화','이메일','계좌','카드','위치','쿠키','결제','기기','IP','식별자','로그'];
   let uniqueCats = 0; cats.forEach(c => { if (t.indexOf(c) !== -1) uniqueCats += 1; });
   const catScore = Math.min(20, uniqueCats * 2);
   score += catScore;
 
-  // Retention period
   let retentionNote = '명시되지 않음/일반';
   const indefiniteKW = ['영구', '무기한', '별도 보유기간', '탈퇴 후에도'];
   const hasPurposeDone = (t.indexOf('목적 달성 시') !== -1) || (t.indexOf('목적달성 시') !== -1);
@@ -164,13 +159,11 @@ function analyzeConsentV2(text) {
     if (hasPurposeDone) { retentionNote = '목적 달성 시'; }
   }
 
-  // Mitigations
   const hasOptOut = anyOf(['동의 거부', '철회', '옵트아웃', '수신 거부']);
   const hasAnon = anyOf(['익명', '가명처리', '가명화']);
   if (hasOptOut) score -= 10;
   if (hasAnon) score -= 5;
 
-  // Length-based sanity adjustment (optional minor penalty for very short text)
   if (t.length < 50) score = Math.max(0, score - 10);
 
   score = Math.max(0, Math.min(100, score));
@@ -190,7 +183,8 @@ function analyzeConsentV2(text) {
   if (hasOptOut || hasAnon) bullets.push(`감경 요인: ${[hasOptOut ? '동의 거부/철회 안내' : null, hasAnon ? '익명/가명 처리' : null].filter(Boolean).join(', ')}`);
 
   const result = { score, label, bullets };
-  // Optional aliases for broader compatibility
+  
+  // Keep your original aliases just in case
   result.riskScore = score;
   result.issues = bullets;
   result.result = { score, label, bullets };
