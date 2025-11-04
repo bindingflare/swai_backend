@@ -5,6 +5,24 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// CORS: allow only the Netlify frontend origin
+app.use((req, res, next) => {
+  const allowedOrigin = 'https://gaeinjjeongbo.netlify.app';
+  const origin = req.headers.origin;
+  if (origin === allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Vary', 'Origin');
+    // Set credentials only if you actually need cookies/authorization headers
+    // res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // simple root route
 app.get('/', (req, res) => {
 	res.send('Consent checker running. Use /api/check to evaluate a consent text.');
