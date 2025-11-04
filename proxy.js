@@ -171,7 +171,7 @@ function analyzeConsentV2(text) {
   let label = '보통';
   if (score < 30) label = '양호';
   else if (score < 60) label = '낮음';
-  else if (score < 80) label = '주의';
+  else if (score < 90) label = '주의';
   else label = '위험';
 
   const bullets = [];
