@@ -176,10 +176,10 @@ function analyzeConsentV2(text) {
   score = Math.max(0, Math.min(100, score));
 
   let label = '보통';
-  if (score < 30) label = '낮음';
-  else if (score < 60) label = '보통';
-  else if (score < 80) label = '높음';
-  else label = '매우 높음';
+  if (score < 30) label = '양호';
+  else if (score < 60) label = '낮음';
+  else if (score < 80) label = '주의';
+  else label = '위험';
 
   const bullets = [];
   bullets.push(`제3자 제공/위탁 징후: ${thirdHits > 0 ? '있음' : '없음'}${approxThird ? ` (사업자 언급 ~${approxThird}회)` : ''}`);
