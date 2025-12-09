@@ -2,6 +2,8 @@ const express = require('express');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const FRONTEND_ENDPOINT = (process.env.FRONTEND_ENDPOINT || '').replace(/\/$/, '');
+const SUMMARY_CHAR_LIMIT = 200;
 
 app.use(express.json());
 
@@ -20,6 +22,23 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
 	res.send('Consent checker running. Use /api/check to evaluate a consent text.');
 });
+
+// Extract text from GET query or POST body, optionally enforcing a character limit
+function extractText(req, limit) {
+	const raw = req.method === 'GET'
+		? (req.query.text || '')
+		: (req.body && (req.body.text || req.body));
+
+	const normalized = (raw || '').toString();
+	const overLimit = limit && normalized.length > limit;
+	const text = overLimit ? normalized.slice(0, limit) : normalized;
+
+	return {
+		text,
+		trimmed: Boolean(overLimit),
+		original: normalized
+	};
+}
 
 // Simple rule-based consent checker
 function analyzeConsent(text) {
@@ -186,15 +205,44 @@ function analyzeConsentV2(text) {
 
 // Support GET and POST
 app.get('/api/check', (req, res) => {
-	const text = req.query.text || '';
+	const { text } = extractText(req);
 	const result = analyzeConsentV2(text);
 	res.json(result);
 });
 
 app.post('/api/check', (req, res) => {
-	const text = req.body && (req.body.text || req.body);
+	const { text } = extractText(req);
 	const result = analyzeConsentV2(text);
 	res.json(result);
+});
+
+// Summary-focused endpoint with 200-char limit
+app.get('/api/checkSummary', (req, res) => {
+	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
+	const result = analyzeConsentV2(text);
+	res.json({
+		...result,
+		meta: {
+			charLimit: SUMMARY_CHAR_LIMIT,
+			trimmed,
+			usedChars: text.length,
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null
+		}
+	});
+});
+
+app.post('/api/checkSummary', (req, res) => {
+	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
+	const result = analyzeConsentV2(text);
+	res.json({
+		...result,
+		meta: {
+			charLimit: SUMMARY_CHAR_LIMIT,
+			trimmed,
+			usedChars: text.length,
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null
+		}
+	});
 });
 
 
