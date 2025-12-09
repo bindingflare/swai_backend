@@ -226,7 +226,8 @@ app.get('/api/checkSummary', (req, res) => {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
+			originalText: original
 		}
 	});
 });
@@ -240,7 +241,23 @@ app.post('/api/checkSummary', (req, res) => {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
+			originalText: original
+		}
+	});
+});
+
+app.post('/api/checkSummary', (req, res) => {
+	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
+	const result = analyzeConsentV2(text);
+	res.json({
+		...result,
+		meta: {
+			charLimit: SUMMARY_CHAR_LIMIT,
+			trimmed,
+			usedChars: text.length,
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
+			originalText: original
 		}
 	});
 });
