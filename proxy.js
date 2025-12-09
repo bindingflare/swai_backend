@@ -226,7 +226,7 @@ app.get('/api/checkSummary', (req, res) => {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result` : null,
 			originalText: original
 		}
 	});
@@ -241,7 +241,7 @@ app.post('/api/checkSummary', (req, res) => {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result` : null,
 			originalText: original
 		}
 	});
