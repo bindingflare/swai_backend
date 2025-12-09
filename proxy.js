@@ -227,7 +227,7 @@ app.post('/api/check', (req, res) => {
 // Summary-focused endpoint with 200-char limit
 app.get('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
-	const result = analyzeConsentV2(text);
+	const result = analyzeConsentV2(original);
 	const analysisPreview = firstLines([
 		`score: ${result.score}`,
 		`label: ${result.label}`,
@@ -248,7 +248,7 @@ app.get('/api/checkSummary', (req, res) => {
 
 app.post('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
-	const result = analyzeConsentV2(text);
+	const result = analyzeConsentV2(original);
 	const analysisPreview = firstLines([
 		`score: ${result.score}`,
 		`label: ${result.label}`,
