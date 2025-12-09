@@ -40,6 +40,14 @@ function extractText(req, limit) {
 	};
 }
 
+function firstLines(text, lines = 2) {
+	return (text || '')
+		.toString()
+		.split(/\r?\n/)
+		.slice(0, lines)
+		.join('\n');
+}
+
 // Simple rule-based consent checker
 function analyzeConsent(text) {
 	text = (text || '').toString().trim();
@@ -220,14 +228,20 @@ app.post('/api/check', (req, res) => {
 app.get('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
 	const result = analyzeConsentV2(text);
+	const analysisPreview = firstLines([
+		`score: ${result.score}`,
+		`label: ${result.label}`,
+		...(result.bullets || [])
+	].join('\n'), 2);
+
 	res.json({
-		...result,
 		meta: {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result` : null,
-			originalText: original
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null,
+			originalText: original,
+			preview: analysisPreview
 		}
 	});
 });
@@ -235,29 +249,20 @@ app.get('/api/checkSummary', (req, res) => {
 app.post('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
 	const result = analyzeConsentV2(text);
-	res.json({
-		...result,
-		meta: {
-			charLimit: SUMMARY_CHAR_LIMIT,
-			trimmed,
-			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result` : null,
-			originalText: original
-		}
-	});
-});
+	const analysisPreview = firstLines([
+		`score: ${result.score}`,
+		`label: ${result.label}`,
+		...(result.bullets || [])
+	].join('\n'), 2);
 
-app.post('/api/checkSummary', (req, res) => {
-	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
-	const result = analyzeConsentV2(text);
 	res.json({
-		...result,
 		meta: {
 			charLimit: SUMMARY_CHAR_LIMIT,
 			trimmed,
 			usedChars: text.length,
-			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/api/checkSummary` : null,
-			originalText: original
+			fullLink: FRONTEND_ENDPOINT ? `${FRONTEND_ENDPOINT}/analysis-result?text=${encodeURIComponent(original)}` : null,
+			originalText: original,
+			preview: analysisPreview
 		}
 	});
 });
