@@ -125,109 +125,154 @@ function analyzeConsent(text) {
 	};
 }
 
-// V2: Enhanced Risk Analyzer
-function analyzeConsentV2(text) {
+// V3: Logic Corrected Risk Analyzer
+function analyzeConsentV3(text) {
   if (!text || !text.toString().trim()) {
-    return { score: 0, label: '분석할 내용이 없습니다', bullets: [] };
+    return { score: 0, label: '분석할 내용이 없습니다', bullets: [], issues: [], riskScore: 0, result: { score: 0, label: '분석할 내용이 없습니다', bullets: [] } };
   }
 
   const t = text.toString();
 
+  // Helper: Count occurrences of specific keywords
   function count(keyword) {
-    const re = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    const re = new RegExp(keyword.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), 'g');
     const m = t.match(re);
     return m ? m.length : 0;
   }
 
+  // Helper: Check if any keyword in array exists
   function anyOf(arr) { return arr.some(k => t.indexOf(k) !== -1); }
 
   let score = 0;
 
+  // 1. Third-party Provision Analysis
   const thirdKW = ['제3자', '제3 자', '제3', '수탁자', '위탁', '제공', '제공받는자', '제공받는 자'];
-  let thirdHits = 0; thirdKW.forEach(k => { thirdHits += count(k); });
+  let thirdHits = 0;
+  thirdKW.forEach(k => { thirdHits += count(k); });
+  
+  // Cap checks to prevent score explosion from repeated company names
   const corpHits = count('주식회사') + count('㈜') + count('유한회사');
   const approxThird = Math.max(0, corpHits);
   const thirdScore = Math.min(30, thirdHits * 5);
   score += thirdScore;
 
+  // 2. Sensitive Information Analysis
   const sensitiveKW = ['민감정보', '고유식별정보', '주민등록번호', '여권번호', '운전면허번호', '건강정보', '바이오정보', '지문', '얼굴인식'];
   const hasSensitive = anyOf(sensitiveKW);
   if (hasSensitive) score += 25;
 
+  // 3. Marketing/Ads Analysis
   const mktKW = ['마케팅', '광고', '홍보', '프로모션', '광고성 정보', '맞춤형', '광고성'];
   const hasMarketing = anyOf(mktKW);
   if (hasMarketing) score += 15;
 
+  // 4. Data Category Diversity
   const cats = ['이름','성명','생년월일','주소','전화','휴대전화','이메일','계좌','카드','위치','쿠키','결제','기기','IP','식별자','로그'];
-  let uniqueCats = 0; cats.forEach(c => { if (t.indexOf(c) !== -1) uniqueCats += 1; });
+  let uniqueCats = 0;
+  cats.forEach(c => { if (t.indexOf(c) !== -1) uniqueCats += 1; });
   const catScore = Math.min(20, uniqueCats * 2);
   score += catScore;
 
+  // 5. Retention Period Analysis (BUG FIX APPLIED HERE)
   let retentionNote = '명시되지 않음/일반';
-  const indefiniteKW = ['영구', '무기한', '별도 보유기간', '탈퇴 후에도'];
-  const hasPurposeDone = (t.indexOf('목적 달성 시') !== -1) || (t.indexOf('목적달성 시') !== -1);
+  
+  // Keywords indicating indefinite retention
+  const indefiniteKW = ['영구', '무기한', '별도 보유기간', '탈퇴 후에도', '준영구'];
+  
+  // Keywords indicating event-driven retention (Improved)
+  const eventDrivenKW = ['목적 달성', '목적달성', '종료 후', '종료후', '폐지', '파기', '다할 때까지'];
+  const hasEventRetention = eventDrivenKW.some(k => t.indexOf(k) !== -1);
+
   if (indefiniteKW.some(k => t.indexOf(k) !== -1)) {
-    score += 20; retentionNote = '무기한/불명확';
+    score += 20; 
+    retentionNote = '무기한/불명확';
   } else {
-    const m = t.match(/([0-9]{1,2})\s*년/g);
+    // Regex Fix: Capture full digits, then filter out years (dates)
+    // Matches "1년", "3년", but filters "2020년" logic below
+    const m = t.match(/([0-9]+)\s*년/g);
+    
+    let maxDuration = 0;
     if (m && m.length) {
-      const years = m.map(s => parseInt(s.replace(/[^0-9]/g,''),10)).filter(Boolean);
-      const maxY = years.length ? Math.max.apply(null, years) : 0;
-      if (maxY >= 3) { score += 10; retentionNote = `${maxY}년 이상`; }
-      else if (maxY >= 1) { score += 5; retentionNote = `${maxY}년 내`; }
+      const years = m.map(s => parseInt(s.replace(/[^0-9]/g,''), 10)).filter(y => y < 100); // Filter out calendar years like 2020
+      maxDuration = years.length ? Math.max.apply(null, years) : 0;
     }
-    if (hasPurposeDone) { retentionNote = '목적 달성 시'; }
+
+    if (maxDuration >= 3) { 
+      score += 10; 
+      retentionNote = `${maxDuration}년 이상`; 
+    } else if (maxDuration >= 1) { 
+      score += 5; 
+      retentionNote = `${maxDuration}년 내`; 
+    }
+    
+    // Priority override: If distinct event termination is found, it overrides simple year finding unless it's indefinite
+    if (hasEventRetention) { 
+      retentionNote = '목적 달성/종료 시 파기'; 
+      // Reset score penalty if it was added purely by regex error, 
+      // though typically event-driven is neutral (score 0 addition)
+      if (maxDuration === 0) score += 0; 
+    }
   }
 
+  // 6. Mitigation Factors (Opt-out / Anonymization)
   const hasOptOut = anyOf(['동의 거부', '철회', '옵트아웃', '수신 거부']);
   const hasAnon = anyOf(['익명', '가명처리', '가명화']);
   if (hasOptOut) score -= 10;
   if (hasAnon) score -= 5;
 
+  // Short text penalty (too vague)
   if (t.length < 50) score = Math.max(0, score - 10);
 
+  // Clamping
   score = Math.max(0, Math.min(100, score));
 
+  // Labeling
   let label = '보통';
   if (score < 30) label = '양호';
   else if (score < 60) label = '낮음';
   else if (score < 90) label = '주의';
   else label = '위험';
 
+  // Summary Bullets
   const bullets = [];
   bullets.push(`제3자 제공/위탁 징후: ${thirdHits > 0 ? '있음' : '없음'}${approxThird ? ` (사업자 언급 ~${approxThird}회)` : ''}`);
   bullets.push(`민감정보 포함: ${hasSensitive ? '예' : '아니오'}`);
   bullets.push(`마케팅/광고 활용: ${hasMarketing ? '예' : '아니오'}`);
   bullets.push(`수집 항목 다양성: ${uniqueCats}개 항목 감지`);
   bullets.push(`보유기간: ${retentionNote}`);
-  if (hasOptOut || hasAnon) bullets.push(`감경 요인: ${[hasOptOut ? '동의 거부/철회 안내' : null, hasAnon ? '익명/가명 처리' : null].filter(Boolean).join(', ')}`);
-
-  const result = { score, label, bullets };
   
-  // Keep your original aliases just in case
-  result.riskScore = score;
-  result.issues = bullets;
-  result.result = { score, label, bullets };
-  return result;
+  const mitigations = [];
+  if (hasOptOut) mitigations.push('동의 거부/철회 안내');
+  if (hasAnon) mitigations.push('익명/가명 처리');
+  if (mitigations.length > 0) bullets.push(`감경 요인: ${mitigations.join(', ')}`);
+
+  return {
+    score: score,
+    riskScore: score,
+    label: label,
+    issues: bullets,
+    bullets,
+    result: { score, label, bullets }
+  };
 }
 
 // Support GET and POST
 app.get('/api/check', (req, res) => {
 	const { text } = extractText(req);
-	const result = analyzeConsentV2(text);
+	const result = analyzeConsentV3(text);
 	res.json(result);
 });
 
 app.post('/api/check', (req, res) => {
 	const { text } = extractText(req);
-	const result = analyzeConsentV2(text);
+	const result = analyzeConsentV3(text);
 	res.json(result);
 });
 
 // Summary-focused endpoint with 200-char limit
 app.get('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
-	const result = analyzeConsentV2(original);
+	const result = analyzeConsentV3(original);
 	const analysisPreview = firstLines([
 		`score: ${result.score}`,
 		`label: ${result.label}`,
@@ -248,7 +293,7 @@ app.get('/api/checkSummary', (req, res) => {
 
 app.post('/api/checkSummary', (req, res) => {
 	const { text, trimmed, original } = extractText(req, SUMMARY_CHAR_LIMIT);
-	const result = analyzeConsentV2(original);
+	const result = analyzeConsentV3(original);
 	const analysisPreview = firstLines([
 		`score: ${result.score}`,
 		`label: ${result.label}`,
